@@ -12,49 +12,70 @@
 #include "Vocab_US_Large.h"
 #include "Vocab_Special.h"
 
-
+// ADC DEFINITIONS
 #define VOLTAGE_MAX 5
 #define ADC_RESOLUTION 10
 #define DECIMAL_RESOLUTION 2
+#define ADC_INPUT A0
+// LCD DEFINITIONS
 #define LCD_VOLTAGE_COLUMN 16-(2+DECIMAL_RESOLUTION) // Place before point and point character = 2 -> Total = 2 + decimal places
-// Configure the LCD using the default address 0x27
+// DEBOUNCE DEFINITIONS
+#define INPUT_BUTTON_PIN 2 // This allows the use of interruptions
+#define PRESS_BUTTON_MASK 0x80000000
+#define HOLD_BUTTON_MASK 0xFFFFFFFF
+
+
+// Configure the LCD using the default address 0x27. 16 columns and 2 rows
 LCD_I2C lcd(0x27, 16, 2);
 
-// Set pin A0 as the input
-const int analog_in = A0;
+// Talkie configurations
+Talkie voice;
 
-// Default values
+// Button debounce state variables
+int button_state = 0;
+uint32_t button_debounce = 0U;
+
+// Default values for voltage reading
 int read_val = 0;
 float converted_val = 0.0;
 long talk_val = 0;
 
-// Talkie configurations
-Talkie voice;
-void sayNumber(long n);
+// ----------------- FUNCTIONS ----------------- //
 
+
+/// @brief Converts the readed voltage into speech. i.e. 2.03 V -> Two point zero three volts
+/// @param value The voltage value obtained from the conversion of the ADC raw value
 void talkVoltage(float value);
 
+/// @brief Converts the input value onto speech in the spanish-regular interval -> From 30 to 90. i.e 40 becomes FOUR-TY
+/// @param ten The ten unit from the value to spech. i.e 45 -> the ten value is 40.
 void sayRegular(int ten);
 
-void sayIrregular(int ten);
+/// @brief Convert the input value onto speech in the spanish-irregular interval -> From 0 - 29. i.e. 17 becomes SEVEN-TEEN
+/// @param value The value to convert to speech
+void sayIrregular(int value);
+
+/// @brief Read and performs software debounce the input button. For this function to work no delay operation must be performed on the loop
+/// @param state The current state of the debouncing operation
+/// @return Returns the state of the button. 1 for simple push and 2 for hold. Zero in any other case
+int readButtonDebounce(uint32_t* state);
+
+
+// ----------------- SETUP ----------------- //
 
 void setup() {
-
   // Setup the LCD according to the library
   lcd.begin();
   lcd.display();
   lcd.backlight();
-  // DEBUG
-  Serial.begin(115200);
-  delay(4000);
-  Serial.println("Working demo");
 
+  // Setup pin for button input
+  pinMode(INPUT_BUTTON_PIN, INPUT_PULLUP);
 }
 
 void loop() {
-
   // Read the value of pin analog_in
-  read_val = analogRead(analog_in);
+  read_val = analogRead(ADC_INPUT);
 
   // Convert the raw value to voltage
   converted_val = (float)(read_val*VOLTAGE_MAX)/(pow(2,ADC_RESOLUTION)-1);
@@ -64,15 +85,20 @@ void loop() {
   lcd.setCursor(LCD_VOLTAGE_COLUMN, 1);
   lcd.print(converted_val,DECIMAL_RESOLUTION);
 
-  // TTS:
-  //sayNumber(converted_val);
-  talkVoltage(converted_val);
+  // Check button state
+  button_state = readButtonDebounce(&button_debounce);
 
-  delay(2000);
-  lcd.clear();
+  // Only if button is pressed do something
+  if(button_state == 1)
+  {
+    talkVoltage(converted_val);
+  }
+
+  // lcd.clear(); // Comented in this case. If not the screen is faslty reset and displays errors. 
 
 }
 
+// ----------------- FUNCTIONS DEFINITIONS ----------------- //
 
 void talkVoltage(float n)
 {
@@ -97,15 +123,19 @@ void talkVoltage(float n)
   voice.say(sp3_POINT);
 
   // Read floating part
+  int ten = (sf/10)%10;
+  int units = sf%10;
   if(sf < 30)
   {
+    if(ten == 0)
+    {
+      voice.say(sp2_ZERO);
+    }
     sayIrregular(sf);
   }
 
   else 
   {
-    int ten = (sf/10)%10;
-    int units = sf%10;
     sayRegular(ten);
     if(units != 0)
     {
@@ -114,6 +144,9 @@ void talkVoltage(float n)
     }
 
   }
+
+  // Finally say the units of the measurement
+  voice.say(sp2_VOLTS);
 }
 
 // Layout this way with spanish translation in mind
@@ -152,10 +185,14 @@ void sayRegular(int ten)
   }
 }
 
-void sayIrregular(int ten)
+void sayIrregular(int value)
 {
-  switch(ten)
+  switch(value)
   {
+    case 0:
+      voice.say(sp2_ZERO);
+      break;
+
     case 1:
       voice.say(sp2_ONE);
       break;
@@ -291,3 +328,20 @@ void sayIrregular(int ten)
   }
 }
 
+int readButtonDebounce(uint32_t* state)
+{
+  // Read the current state of the button
+  uint8_t temporal_read = (uint8_t) digitalRead(INPUT_BUTTON_PIN);
+  uint8_t read_value = (uint8_t) (~temporal_read & bit(INPUT_BUTTON_PIN) >> INPUT_BUTTON_PIN) ; // Negative logic --> when button pressed is low, resulting = 1111_1111 | for high = 0000_0001
+  // Debounce the value 
+  *state = (*state << 1) | read_value;
+
+  // Check current state
+  switch(*state)
+  {
+    case PRESS_BUTTON_MASK: return 1;
+    case HOLD_BUTTON_MASK: return 2;
+    default: return 0;
+  }
+
+}
