@@ -94,7 +94,7 @@ void loop() {
     talkVoltage(converted_val);
   }
 
-  // lcd.clear(); // Comented in this case. If not the screen is faslty reset and displays errors. 
+  lcd.clear(); // Comented in this case. If not the screen is faslty reset and displays errors.
 
 }
 
