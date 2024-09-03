@@ -105,6 +105,7 @@ void loop()
   converted_val = converted_val * DISPLAY_FACTOR / RESISTANCE_VALUE;
 
   // Display on the LCD
+  lcd.setCursor(0,0);
   lcd.print("Current:");
   // ->Display sign
   lcd.setCursor(LCD_VOLTAGE_COLUMN - 1, 1);
@@ -140,64 +141,10 @@ void loop()
     voice.say(sp2_AMPS);
   }
 
-  lcd.clear(); // Comented in this case. If not the screen is faslty reset and displays errors.
+  //lcd.clear(); // Comented in this case. If not the screen is faslty reset and displays errors.
 }
 
 // ----------------- FUNCTIONS DEFINITIONS ----------------- //
-
-void talkVoltage(float n, bool sign)
-{
-
-  // Get integral part
-  double i = 0;
-  double f = modf(n, &i);
-  int si = round(i);
-  int sf = round(f * 100);
-
-  // Check correct representation of integral part
-  if (sf == 100)
-  {
-    si += 1;
-    sf = 0;
-  }
-
-  // Read the sign
-  if (sign)
-  {
-    voice.say(sp3_MINUS);
-  }
-
-  // Read integral part
-  sayIrregular(si);
-
-  // Dot for separation
-  voice.say(sp3_POINT);
-
-  // Read floating part
-  int ten = (sf / 10) % 10;
-  int units = sf % 10;
-  if (sf < 30)
-  {
-    if (ten == 0)
-    {
-      voice.say(sp2_ZERO);
-    }
-    sayIrregular(sf);
-  }
-
-  else
-  {
-    sayRegular(ten);
-    if (units != 0)
-    {
-      // voice.say(sp2_AND); // Commented for english version
-      sayIrregular(units);
-    }
-  }
-
-  // Finally say the units of the measurement
-  voice.say(sp2_AMPS);
-}
 
 void sayNumber(long n)
 {
